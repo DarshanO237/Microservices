@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  postgres-2:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: daro
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: device
+
+    ports:
+      - 5433:5432
+    networks:
+      - s-network
+
+
+  postgres-1:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: daro
+      POSTGRES_PASSWORD: 1234
+      POSTGRES_DB: subscriber
+
+    ports:
+      - 5432:5432
+    networks:
+      - s-network
+
+#    volumes:
+#      - postgres-s-data:/var/lib/postgresql/data
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.0.1
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - s-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.0.1
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    networks:
+      - s-network
+
+  service-registry:
+    build:
+      context: ./Service-registry
+      dockerfile: Dockerfile
+    ports:
+      - "8761:8761"
+    networks:
+      - s-network
+
+  subscriber-manager:
+    build:
+      context: ./subscriberManager
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres-1
+      - kafka
+      - service-registry
+    ports:
+      - "8081:8081"
+    networks:
+      - s-network
+
+
+  device-manager:
+    build:
+      context: ./DeviceManager
+      dockerfile: Dockerfile
+    depends_on:
+      - postgres-2
+      - kafka
+      - service-registry
+    ports:
+      - "8080:8080"
+    networks:
+      - s-network
+
+
+
+networks:
+    s-network:
+      driver: bridge
+
+
+volumes:
+    postgres-s-data:
